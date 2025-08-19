@@ -33,14 +33,30 @@ def http_download(url: str, suffix: str) -> str:
     return tmp.name
 
 def ffmpeg_mix(voice_path: str, music_path: str) -> str:
+    # Генерируем уникальное имя выходного файла
     out_id = uuid.uuid4().hex
     out_path = f"static/out/{out_id}.ogg"
+
+    # Получаем длительность голосового файла
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries",
+         "format=duration", "-of",
+         "default=noprint_wrappers=1:nokey=1", voice_path],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT
+    )
+    voice_duration = float(result.stdout)
+
+    # FFmpeg: обрезаем музыку под длину голоса и миксуем
     cmd = [
-        "ffmpeg","-y",
+        "ffmpeg", "-y",
+        "-i", music_path,
         "-i", voice_path,
-        "-stream_loop","-1","-i", music_path,
-        "-filter_complex","[1:a]volume=0.2[a1];[0:a][a1]amix=inputs=2:duration=first:dropout_transition=3",
-        "-c:a","libopus","-b:a","64k",
+        "-filter_complex",
+        f"[0:a]atrim=0:{voice_duration},asetpts=PTS-STARTPTS[bg];"
+        "[1:a]volume=1.0[voice];"
+        "[bg][voice]amix=inputs=2:duration=first:dropout_transition=0",
+        "-c:a", "libopus", "-b:a", "64k",
         out_path
     ]
     subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
