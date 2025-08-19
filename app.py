@@ -36,30 +36,42 @@ def ffmpeg_mix(voice_path: str, music_path: str) -> str:
     out_id = uuid.uuid4().hex
     out_path = f"static/out/{out_id}.ogg"
 
-    # Получаем длительность голосового файла
+    # Узнаём длительность голосового файла
     result = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
-         "stream=duration", "-of", "default=noprint_wrappers=1:nokey=1", voice_path],
+        ["ffprobe","-v","error","-show_entries",
+         "format=duration","-of","default=noprint_wrappers=1:nokey=1", voice_path],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT
     )
     voice_duration = float(result.stdout.strip())
 
-    # FFmpeg: обрезаем музыку под длину голоса и миксуем
-    cmd = [
+    # Обрезаем музыку заранее
+    trimmed_music = f"static/out/{uuid.uuid4().hex}_trimmed.mp3"
+    cmd_trim = [
         "ffmpeg", "-y",
         "-i", music_path,
+        "-t", str(voice_duration),  # обрезаем по времени
+        "-c", "copy",
+        trimmed_music
+    ]
+    subprocess.run(cmd_trim, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    # Микшируем обрезанную музыку и голос
+    cmd_mix = [
+        "ffmpeg", "-y",
+        "-i", trimmed_music,
         "-i", voice_path,
-        "-filter_complex",
-        f"[0:a]atrim=0:{voice_duration},asetpts=PTS-STARTPTS[bg];"
-        "[1:a]asetpts=PTS-STARTPTS[voice];"
-        "[bg][voice]amix=inputs=2:duration=first:dropout_transition=0",
-        "-c:a", "libopus", "-b:a", "64k",
+        "-filter_complex", "[1:a]volume=1.0[voice];[0:a][voice]amix=inputs=2:dropout_transition=0",
+        "-c:a", "libopus",
+        "-b:a", "64k",
         out_path
     ]
-    subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    return out_path
+    subprocess.run(cmd_mix, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
+    # Удаляем временный обрезанный музыкальный файл
+    os.remove(trimmed_music)
+
+    return out_path
 
 def extract_chat_and_file_id(update: dict):
     for key in ("message","channel_post","edited_message"):
