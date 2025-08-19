@@ -32,46 +32,57 @@ def http_download(url: str, suffix: str) -> str:
     tmp.write(r.content); tmp.close()
     return tmp.name
 
-def ffmpeg_mix(voice_path: str, music_path: str) -> str:
-    out_id = uuid.uuid4().hex
-    out_path = f"static/out/{out_id}.ogg"
+@app.post("/mix")
+async def mix_voice_with_music(
+    voice: UploadFile = File(...), 
+    music: UploadFile = File(None)
+):
+    # Папки
+    INPUT_DIR = "static/in"
+    OUTPUT_DIR = "static/out"
+    os.makedirs(INPUT_DIR, exist_ok=True)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # Узнаём длительность голосового файла
+    # Сохраняем голосовое сообщение
+    voice_path = os.path.join(INPUT_DIR, f"{uuid.uuid4()}_{voice.filename}")
+    with open(voice_path, "wb") as f:
+        shutil.copyfileobj(voice.file, f)
+    
+    # Сохраняем музыку
+    if music:
+        music_path = os.path.join(INPUT_DIR, f"{uuid.uuid4()}_{music.filename}")
+        with open(music_path, "wb") as f:
+            shutil.copyfileobj(music.file, f)
+    else:
+        music_path = "static/default.mp3"
+
+    # Узнаём длительность голоса
     result = subprocess.run(
-        ["ffprobe","-v","error","-show_entries",
-         "format=duration","-of","default=noprint_wrappers=1:nokey=1", voice_path],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT
+        ["ffprobe","-v","error","-show_entries","format=duration",
+         "-of","default=noprint_wrappers=1:nokey=1", voice_path],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     voice_duration = float(result.stdout.strip())
 
-    # Обрезаем музыку заранее
-    trimmed_music = f"static/out/{uuid.uuid4().hex}_trimmed.mp3"
-    cmd_trim = [
+    # Генерируем уникальный файл результата
+    out_path = os.path.join(OUTPUT_DIR, f"{uuid.uuid4()}_mixed.mp3")
+
+    # FFmpeg: обрезаем музыку под голос и миксуем
+    cmd = [
         "ffmpeg", "-y",
         "-i", music_path,
-        "-t", str(voice_duration),  # обрезаем по времени
-        "-c", "copy",
-        trimmed_music
-    ]
-    subprocess.run(cmd_trim, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    # Микшируем обрезанную музыку и голос
-    cmd_mix = [
-        "ffmpeg", "-y",
-        "-i", trimmed_music,
         "-i", voice_path,
-        "-filter_complex", "[1:a]volume=1.0[voice];[0:a][voice]amix=inputs=2:dropout_transition=0",
-        "-c:a", "libopus",
-        "-b:a", "64k",
+        "-filter_complex",
+        f"[0:a]atrim=0:{voice_duration},asetpts=PTS-STARTPTS[bg];"
+        "[1:a]asetpts=PTS-STARTPTS[voice];"
+        "[bg][voice]amix=inputs=2:dropout_transition=0",
+        "-c:a", "libmp3lame",
+        "-b:a", "128k",
         out_path
     ]
-    subprocess.run(cmd_mix, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    subprocess.run(cmd, check=True)
 
-    # Удаляем временный обрезанный музыкальный файл
-    os.remove(trimmed_music)
-
-    return out_path
+    return FileResponse(out_path, media_type="audio/mpeg", filename="mixed.mp3")
 
 def extract_chat_and_file_id(update: dict):
     for key in ("message","channel_post","edited_message"):
