@@ -33,19 +33,17 @@ def http_download(url: str, suffix: str) -> str:
     return tmp.name
 
 def ffmpeg_mix(voice_path: str, music_path: str) -> str:
-    # Генерируем уникальное имя выходного файла
     out_id = uuid.uuid4().hex
     out_path = f"static/out/{out_id}.ogg"
 
     # Получаем длительность голосового файла
     result = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries",
-         "format=duration", "-of",
-         "default=noprint_wrappers=1:nokey=1", voice_path],
+        ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
+         "stream=duration", "-of", "default=noprint_wrappers=1:nokey=1", voice_path],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT
     )
-    voice_duration = float(result.stdout)
+    voice_duration = float(result.stdout.strip())
 
     # FFmpeg: обрезаем музыку под длину голоса и миксуем
     cmd = [
@@ -54,13 +52,14 @@ def ffmpeg_mix(voice_path: str, music_path: str) -> str:
         "-i", voice_path,
         "-filter_complex",
         f"[0:a]atrim=0:{voice_duration},asetpts=PTS-STARTPTS[bg];"
-        "[1:a]volume=1.0[voice];"
+        "[1:a]asetpts=PTS-STARTPTS[voice];"
         "[bg][voice]amix=inputs=2:duration=first:dropout_transition=0",
         "-c:a", "libopus", "-b:a", "64k",
         out_path
     ]
     subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return out_path
+
 
 def extract_chat_and_file_id(update: dict):
     for key in ("message","channel_post","edited_message"):
