@@ -88,4 +88,11 @@ def mix(payload=Body(...)):
     @app.get("/")
     def read_root():
         return {"message": "Service is running"}
+        from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+def read_root():
+    return {"message": "Service is running"}
 
