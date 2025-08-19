@@ -85,3 +85,7 @@ def mix(payload=Body(...)):
         return {"ok": r.ok, "sent_by": "bot", "result_url": result_url}
 
     return {"ok": True, "sent_by": "url", "result_url": result_url}
+    @app.get("/")
+def read_root():
+    return {"message": "Service is running"}
+
