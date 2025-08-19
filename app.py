@@ -96,3 +96,61 @@ app = FastAPI()
 def read_root():
     return {"message": "Service is running"}
 
+from fastapi import FastAPI, File, UploadFile
+from fastapi.responses import FileResponse
+import shutil
+import os
+import subprocess
+import uuid
+
+app = FastAPI()
+
+# Папки для временных файлов
+INPUT_DIR = "static/in"
+OUTPUT_DIR = "static/out"
+MUSIC_FILE = "static/default.mp3"  # фон по умолчанию
+
+os.makedirs(INPUT_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+@app.get("/")
+def read_root():
+    return {"message": "Service is running"}
+
+@app.post("/mix")
+async def mix_voice_with_music(
+    voice: UploadFile = File(...), 
+    music: UploadFile = File(None)
+):
+    # Генерируем уникальные имена файлов
+    voice_path = os.path.join(INPUT_DIR, f"{uuid.uuid4()}_{voice.filename}")
+    out_path = os.path.join(OUTPUT_DIR, f"{uuid.uuid4()}_mixed.mp3")
+    
+    # Сохраняем голосовое сообщение
+    with open(voice_path, "wb") as f:
+        shutil.copyfileobj(voice.file, f)
+    
+    # Если пользователь прислал музыку, сохраняем её
+    if music:
+        music_path = os.path.join(INPUT_DIR, f"{uuid.uuid4()}_{music.filename}")
+        with open(music_path, "wb") as f:
+            shutil.copyfileobj(music.file, f)
+    else:
+        music_path = MUSIC_FILE
+
+    # Накладываем голос на музыку с помощью FFmpeg
+    # Голос будет громче музыки
+    cmd = [
+        "ffmpeg",
+        "-i", music_path,
+        "-i", voice_path,
+        "-filter_complex", "[1:a]volume=1.0[a1];[0:a][a1]amix=inputs=2:duration=longest",
+        "-c:a", "mp3",
+        out_path,
+        "-y"
+    ]
+    subprocess.run(cmd, check=True)
+
+    return FileResponse(out_path, media_type="audio/mpeg", filename="mixed.mp3")
+
+
