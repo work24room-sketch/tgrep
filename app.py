@@ -15,26 +15,23 @@ async def mix_audio(voice: UploadFile = File(...), music: UploadFile = File(...)
         music_bytes = await music.read()
         music_audio = AudioSegment.from_file(io.BytesIO(music_bytes))
 
-        # Смещение голоса на 3 сек
-        delay_ms = 3000
-        voice_with_delay = AudioSegment.silent(duration=delay_ms) + voice_audio  
+        # Задаём параметры
+        delay_ms = 3000       # задержка голоса 3 сек
+        post_music_ms = 5000  # музыка после голоса 5 сек
 
-        # Длина музыки = длина голоса + 5 сек
-        target_length = len(voice_with_delay) + 5000
-
+        # Делаем длину музыки = голос + задержка + пост-музыка
+        target_length = delay_ms + len(voice_audio) + post_music_ms
         if len(music_audio) < target_length:
-            # Зацикливаем если короче
             loops = (target_length // len(music_audio)) + 1
             music_audio = (music_audio * loops)[:target_length]
         else:
-            # Обрезаем если длиннее
             music_audio = music_audio[:target_length]
 
-        # Уменьшаем громкость музыки (-10 dB)
+        # Уменьшаем громкость музыки
         music_audio = music_audio - 10  
 
-        # Делаем микс (музыка + голос со смещением)
-        mixed = music_audio.overlay(voice_with_delay)
+        # Накладываем голос не с нуля, а с задержкой
+        mixed = music_audio.overlay(voice_audio, position=delay_ms)
 
         # Экспортируем в mp3
         buf = io.BytesIO()
@@ -44,7 +41,7 @@ async def mix_audio(voice: UploadFile = File(...), music: UploadFile = File(...)
         return {
             "status": "ok",
             "length_ms": len(mixed),
-            "message": "Голос начинается через 3 секунды, музыка продолжается 5 секунд после окончания."
+            "message": "Голос начнётся через 3 сек, музыка останется на фоне и продолжится на 5 сек дольше."
         }
 
     except Exception as e:
