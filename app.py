@@ -19,14 +19,23 @@ async def mix_audio(voice: UploadFile = File(...), music: UploadFile = File(...)
         music_bytes = await music.read()
         music_audio = AudioSegment.from_file(io.BytesIO(music_bytes))
 
-        # Обрезаем музыку по длине голоса
-        music_audio = music_audio[:len(voice_audio)]
+        # Добавляем 3 секунды тишины перед голосом
+        silence = AudioSegment.silent(duration=3000)
+        voice_audio = silence + voice_audio  
+
+        # Делаем так, чтобы музыка играла +5 секунд после конца голоса
+        target_length = len(voice_audio) + 5000
+        music_audio = music_audio[:target_length]  # если музыка длиннее — обрезаем
+        if len(music_audio) < target_length:  
+            # если музыка короче — зациклим её
+            loops = (target_length // len(music_audio)) + 1
+            music_audio = (music_audio * loops)[:target_length]
 
         # Уменьшаем громкость музыки (-10 dB)
         music_audio = music_audio - 10  
 
         # Делаем микс
-        mixed = voice_audio.overlay(music_audio)
+        mixed = music_audio.overlay(voice_audio)
 
         # Сжимаем до mp3 (128 kbps)
         buf = io.BytesIO()
@@ -36,7 +45,7 @@ async def mix_audio(voice: UploadFile = File(...), music: UploadFile = File(...)
         return {
             "status": "ok",
             "length_ms": len(mixed),
-            "message": "Файл успешно обработан!"
+            "message": "Файл успешно обработан! Голос начинается через 3 сек, музыка продолжается +5 сек."
         }
 
     except Exception as e:
