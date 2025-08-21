@@ -190,19 +190,18 @@ def mix(payload: dict = Body(...)):  # Явно указываем тип dict
     tg_token = payload.get("telegram_token") or TELEGRAM_BOT_TOKEN
     if not tg_token:
         return JSONResponse({"ok": False, "error": "TELEGRAM_BOT_TOKEN not set"}, status_code=400)
-    # Параметры микса (можно присылать из SaleBot)
+
+    # Параметры микса
     delay_ms = int(payload.get("delay_ms", 3000))
     post_ms  = int(payload.get("post_ms", 5000))
     bg_db    = float(payload.get("bg_db", -10.0))
 
-    # Разбор апдейта
-    update = payload.get("webhook")
-    if isinstance(update, str):
-        update = json.loads(update)
-    chat_id, file_id, kind = extract_chat_and_file_id(update or {})
+    # Разбор апдейта - получаем webhook данные
+    update_data = payload.get("webhook")
+    chat_id, file_id, kind = extract_chat_and_file_id(update_data)
+    
     if not file_id:
         return JSONResponse({"ok": False, "error": "voice/audio file_id not found in webhook"}, status_code=400)
-
     # Скачиваем голос
     suffix = ".ogg" if kind == "voice" else ".mp3"
     voice_path = tg_download_file(file_id, tg_token, suffix=suffix)
