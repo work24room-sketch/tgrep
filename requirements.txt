@@ -2,3 +2,7 @@ fastapi==0.112.2
 uvicorn==0.30.6
 requests==2.32.3
 python-multipart==0.0.9
+flask
+ffmpeg-python
+pydub
+requests
