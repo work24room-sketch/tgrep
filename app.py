@@ -72,7 +72,29 @@ def http_download(url: str, suffix: str) -> str:
     tmp.write(r.content); tmp.close()
     return tmp.name
 
-def extract_chat_and_file_id(update: dict):
+def extract_chat_and_file_id(update):
+    """
+    Извлекает chat_id и file_id из update.
+    Теперь принимает как dict, так и str (автоматически конвертирует).
+    """
+    # Если update - строка, пытаемся распарсить её как JSON
+    if isinstance(update, str):
+        try:
+            update = json.loads(update)
+        except json.JSONDecodeError:
+            return None, None, None
+    
+    # Если update - bytes, декодируем в строку и парсим
+    if isinstance(update, bytes):
+        try:
+            update = json.loads(update.decode('utf-8'))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return None, None, None
+    
+    # Теперь работаем с dict
+    if not isinstance(update, dict):
+        return None, None, None
+
     for key in ("message", "channel_post", "edited_message"):
         node = update.get(key)
         if not node:
@@ -164,11 +186,10 @@ async def mix_upload(
 
 # -------- 2) Telegram webhook JSON (SaleBot/интеграция) --------
 @app.post("/mix")
-def mix(payload = Body(...)):
+def mix(payload: dict = Body(...)):  # Явно указываем тип dict
     tg_token = payload.get("telegram_token") or TELEGRAM_BOT_TOKEN
     if not tg_token:
         return JSONResponse({"ok": False, "error": "TELEGRAM_BOT_TOKEN not set"}, status_code=400)
-
     # Параметры микса (можно присылать из SaleBot)
     delay_ms = int(payload.get("delay_ms", 3000))
     post_ms  = int(payload.get("post_ms", 5000))
