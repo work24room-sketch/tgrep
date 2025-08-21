@@ -4,7 +4,11 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 # -------- Конфиг из переменных окружения --------
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7635431059:AAEIxUKsUCzs02LjRpasHG-Kp80PUduoOy0")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+if not TELEGRAM_BOT_TOKEN:
+    logging.error("Критическая ошибка: переменная окружения TELEGRAM_BOT_TOKEN не задана!")
+    # В продакшене лучше использовать raise, но для Render подойдет и logging
+    # raise ValueError("TELEGRAM_BOT_TOKEN not set in environment variables")
 BASE_PUBLIC_URL    = os.getenv("BASE_PUBLIC_URL", "https://tgrep.onrender.com")  # например: https://tgrep.onrender.com
 
 # -------- Инициализация --------
